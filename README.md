@@ -21,19 +21,19 @@ This assignment implements **Principal Component Analysis (PCA)** from scratch u
 
 ## Assignment Requirements Met
 
-### ✅ PCA Implementation
+### PCA Implementation
 - **From-scratch implementation** using only NumPy (no sklearn)
 - **Eigendecomposition** for principal component extraction
 - **Variance-based component selection** (95% threshold)
 - **Step-by-step mathematical calculations**
 
-### ✅ Data Requirements
-- **Missing values present** in dataset (handled via imputation)
-- **Non-numeric columns** included (country names, codes)
-- **More than 10 columns** (65 features total)
+### Data Requirements
+- **Missing values present** in dataset (67,609 handled via imputation)
+- **Non-numeric columns** included (country names, indicator codes)
+- **More than 10 columns** (87 features after preprocessing)
 - **African context data** (Sub-Saharan Africa indicators)
 
-### ✅ Analysis & Visualization
+### Analysis & Visualization
 - **Scree plot** for component selection
 - **Principal component visualization** 
 - **Variance explanation** analysis
@@ -47,9 +47,9 @@ This assignment implements **Principal Component Analysis (PCA)** from scratch u
 **File**: `API_SSF_DS2_en_csv_v2_14635.csv`  
 **Characteristics**:
 - **Samples**: 1,516 data points
-- **Original Features**: 65 socio-economic indicators
-- **Missing Values**: Present (handled via imputation)
-- **Non-numeric Columns**: Country names, region codes
+- **Original Features**: 70 columns, 87 after preprocessing
+- **Missing Values**: 67,609 (handled via imputation)
+- **Non-numeric Columns**: Country names, indicator codes
 - **Time Period**: Multi-year African development data
 
 ---
@@ -102,48 +102,55 @@ jupyter>=1.0.0
 ### Step 1: Data Preprocessing
 ```python
 # Handle missing values
-data_cleaned = data.fillna(data.mean(numeric_only=True))
+for col in numeric_cols:
+    if df_clean[col].isnull().sum() > 0:
+        df_clean[col] = df_clean[col].fillna(df_clean[col].mean())
 
-# Encode non-numeric columns
-numeric_data = data_cleaned.select_dtypes(include=[np.number])
+# Encode non-numeric columns with one-hot encoding
+for col in non_numeric_cols:
+    if 2 <= unique_vals <= 20:
+        encoded = pd.get_dummies(df_encoded[col], prefix=col, prefix_sep='_')
+        df_encoded = pd.concat([df_encoded, encoded], axis=1)
 
-# Standardize features
-standardized_data = (numeric_data - numeric_data.mean()) / numeric_data.std()
+# Standardize features (numpy only)
+standardized_data = (data_array - mean) / std
 ```
 
 ### Step 2: Covariance Matrix Calculation
 ```python
 # Manual covariance calculation
-n_samples = standardized_data.shape[0]
-covariance_matrix = (1 / (n_samples - 1)) * np.dot(standardized_data.T, standardized_data)
+n = standardized_data.shape[0]
+cov_matrix = (1 / (n - 1)) * np.dot(standardized_data.T, standardized_data)
 ```
 
 ### Step 3: Eigendecomposition
 ```python
 # Extract eigenvalues and eigenvectors
-eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
+eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
 
 # Sort by eigenvalues (descending)
 sorted_indices = np.argsort(eigenvalues)[::-1]
-eigenvalues_sorted = eigenvalues[sorted_indices]
-eigenvectors_sorted = eigenvectors[:, sorted_indices]
+sorted_eigenvalues = eigenvalues[sorted_indices]
+sorted_eigenvectors = eigenvectors[:, sorted_indices]
 ```
 
 ### Step 4: Component Selection
 ```python
 # Calculate explained variance
-explained_variance = eigenvalues_sorted / np.sum(eigenvalues_sorted) * 100
+sorted_eigenvalues_real = sorted_eigenvalues.real
+total_variance = np.sum(sorted_eigenvalues_real)
+explained_variance = (sorted_eigenvalues_real / total_variance) * 100
 cumulative_variance = np.cumsum(explained_variance)
 
 # Select components for 95% variance
-n_components = np.argmax(cumulative_variance >= 95.0) + 1
+variance_threshold = 95.0
+num_components = np.argmax(cumulative_variance >= variance_threshold) + 1
 ```
 
 ### Step 5: Data Transformation
 ```python
 # Project data onto principal components
-principal_components = eigenvectors_sorted[:, :n_components]
-transformed_data = np.dot(standardized_data, principal_components)
+reduced_data = np.dot(standardized_data, sorted_eigenvectors[:, :num_components].real)
 ```
 
 ---
@@ -151,23 +158,25 @@ transformed_data = np.dot(standardized_data, principal_components)
 ## Results & Insights
 
 ### Dimensionality Reduction
-- **Original Dimensions**: 65 features
-- **Reduced Dimensions**: 3 components
-- **Compression Ratio**: 21.7:1
-- **Variance Retained**: 96.46%
+- **Original Dimensions**: 87 features
+- **Reduced Dimensions**: 12 components
+- **Compression Ratio**: 7.25:1
+- **Variance Retained**: 95.07%
 
 ### Principal Components Analysis
 | Component | Variance Explained | Cumulative Variance |
 |-----------|-------------------|-------------------|
-| PC1       | 61.9%            | 61.9%            |
-| PC2       | 29.0%            | 90.9%            |
-| PC3       | 5.6%             | 96.5%            |
+| PC1       | 46.21%           | 46.21%           |
+| PC2       | 21.62%           | 67.83%           |
+| PC3       | 4.59%            | 72.42%           |
+| PC4       | 4.24%            | 76.66%           |
+| PC5       | 2.31%            | 78.97%           |
 
 ### Key Findings
-- **PC1**: Captures overall economic development indicators
-- **PC2**: Represents demographic and social factors
-- **PC3**: Reflects infrastructure and governance metrics
-- **Data Efficiency**: 95.4% dimensionality reduction achieved
+- **PC1**: Captures overall economic development indicators (46.2% variance)
+- **PC2**: Represents demographic and social factors (21.6% variance)
+- **PC3-PC12**: Reflect infrastructure, governance, and sector-specific metrics
+- **Data Efficiency**: 86.2% dimensionality reduction achieved
 
 ---
 
@@ -182,12 +191,20 @@ plt.ylabel('Eigenvalue')
 plt.title('Scree Plot - Component Selection')
 ```
 
-### 2. Biplot Analysis
-Displays feature relationships in reduced space
+### 2. Before/After PCA Comparison
+Displays original vs transformed feature space
 ```python
-plt.scatter(transformed_data[:, 0], transformed_data[:, 1], alpha=0.6)
-plt.xlabel(f'PC1 ({explained_variance[0]:.1f}% variance)')
-plt.ylabel(f'PC2 ({explained_variance[1]:.1f}% variance)')
+# Original feature space
+plt.scatter(standardized_data[:, 0], standardized_data[:, 1], c='blue')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.title('Original Feature Space (Before PCA)')
+
+# PCA space
+plt.scatter(reduced_data[:, 0], reduced_data[:, 1], c='red')
+plt.xlabel(f'PC1 ({explained_variance[0]:.1f}% Variance)')
+plt.ylabel(f'PC2 ({explained_variance[1]:.1f}% Variance)')
+plt.title('Principal Component Space (After PCA)')
 ```
 
 ### 3. Variance Explanation Chart
@@ -233,32 +250,32 @@ jupyter notebook pca_notebook.ipynb
 ### Key Code Sections
 ```python
 # Load and preprocess African dataset
-df = pd.read_csv('data/API_SSF_DS2_en_csv_v2_14635.csv')
+df = pd.read_csv('data/API_SSF_DS2_en_csv_v2_14635.csv', skiprows=4)
 
 # Implement PCA from scratch
-eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
+eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
 
 # Select components for 95% variance
-n_components = np.argmax(cumulative_variance >= 95.0) + 1
+num_components = np.argmax(cumulative_variance >= 95.0) + 1
 ```
 
 ---
 
 ## Assignment Deliverables
 
-### 📊 **Implementation Results**
-- **Dimensionality Reduction**: 65 → 3 features (95.4% reduction)
-- **Variance Retained**: 96.46% with 3 components
+### Implementation Results
+- **Dimensionality Reduction**: 87 → 12 features (86.2% reduction)
+- **Variance Retained**: 95.07% with 12 components
 - **Processing Efficiency**: Handles 1,516 samples effectively
-- **Data Quality**: 100% missing value coverage
+- **Data Quality**: 100% missing value coverage (67,609 values imputed)
 
-### 📈 **Technical Achievements**
+### Technical Achievements
 - **Mathematical Rigor**: Complete eigendecomposition from scratch
-- **Data Preprocessing**: Robust handling of mixed data types
-- **Visualization Quality**: Clear scree plots and component analysis
+- **Data Preprocessing**: Robust handling of mixed data types and missing values
+- **Visualization Quality**: Clear before/after PCA comparison plots
 - **Code Documentation**: Well-commented implementation steps
 
-### 🎯 **Learning Outcomes**
+### Learning Outcomes
 - Implemented PCA algorithm without external ML libraries
 - Demonstrated understanding of eigenvalue decomposition
 - Applied dimensionality reduction to real-world African data
@@ -281,7 +298,7 @@ n_components = np.argmax(cumulative_variance >= 95.0) + 1
 
 *Demonstrating PCA fundamentals through hands-on implementation*
 
-</div>ion opportunities
+</div>
 
 ---
 
